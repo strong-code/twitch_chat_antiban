@@ -6,7 +6,6 @@ ProxyChat = {
     messages: [],
     thirdPartyEmotes: {},
     thirdPartyEmoteCodesByPriority: [],
-    badges: {},
     pingIntervalID: null,
 
     loadChannelData: async function () {
@@ -18,13 +17,6 @@ ProxyChat = {
             await ProxyChat.loadThirdPartyEmotes();
             await ProxyChat.loadTwitchBadges();
         }
-    },
-
-    loadTwitchBadges: async function () {
-        const globalBadges = await getTwitchBadges('global');
-        const channelBadges = await getTwitchBadges(ProxyChat.channelId);
-        ProxyChat.parseTwitchBadges(globalBadges?.data ?? []);
-        ProxyChat.parseTwitchBadges(channelBadges?.data ?? []);
     },
 
     loadThirdPartyEmotes: async function () {
@@ -72,18 +64,6 @@ ProxyChat = {
         // store emotes priority by its length
         ProxyChat.thirdPartyEmoteCodesByPriority = Object.keys(ProxyChat.thirdPartyEmotes);
         ProxyChat.thirdPartyEmoteCodesByPriority.sort((a, b) => b.length - a.length);
-    },
-
-    parseTwitchBadges: function (badgeData) {
-        for (const badge of badgeData) {
-            for (const version of badge.versions) {
-                const key = `${badge.set_id}/${version.id}`;
-                ProxyChat.badges[key] = {
-                    src1x: version.image_url_1x,
-                    src4x: version.image_url_4x
-                };
-            }
-        }
     },
 
     replaceTwitchEmotes: function (message) {
@@ -151,27 +131,6 @@ ProxyChat = {
                 </div>`;
     },
 
-    wrapBadge: function (badgeData) {
-        return `<div class="inline-image">
-                    <div class="chat-badge">
-                        <img class="chat-image" src="${badgeData.src1x}" srcset="${badgeData.src1x} 1x, ${badgeData.src4x} 4x"/>
-                    </div>
-                </div>`;
-    },
-
-    wrapBadges: function (message) {
-        let badges = [];
-        if (message.badges) {
-            message.badges.split(',').forEach(badge => {
-                if (badge in ProxyChat.badges) {
-                    const badgeData = ProxyChat.badges[badge];
-                    badges.push(ProxyChat.wrapBadge(badgeData));
-                }
-            });
-        }
-        return badges;
-    },
-
     log: function (message) {
         ProxyChat.writeChat({
             'display-name': "Twitch Anti-Ban",
@@ -180,21 +139,21 @@ ProxyChat = {
         console.log(`Twitch Anti-Ban: ${message}`);
     },
 
-    clearMessage: function (messageId) {
+    softDelete: function (messageId) {
         setTimeout(function () {
-            $(`.chat-line[data-id=${messageId}]`).remove();
+            $(`.chat-line[data-id=${messageId}]`).css('opacity', '0.5');
         }, 100);
     },
 
-    clearAllMessages: function (userId) {
+    softDeleteAllMessages: function (userId) {
         setTimeout(function () {
-            $(`.chat-line[data-user-id=${userId}]`).remove();
+            $(`.chat-line[data-user-id=${userId}]`).css('opacity', '0.5');
         }, 100);
     },
 
     initChat: function () {
         let proxyChat = $(`<div id="proxy-chat"></div>`);
-        let chatPaused = $(`<div class="chat-paused"><span>Scroll Down</span></div>`);
+        let chatPaused = $(`<div class="chat-paused"><span>Chat paused due to mouseover</span></div>`);
         let chatContainer = $('.chat-room__content').children().first();
         chatContainer.removeClass();
         chatContainer.addClass("chat-list--default");
@@ -212,9 +171,10 @@ ProxyChat = {
         if (ProxyChat.messages.length > 0) {
             ProxyChat.messages.forEach(message => {
                 const chatContainer = $('.chat-list--default');
-                const isScrolledNearBottom = chatContainer.prop('scrollHeight') - chatContainer.innerHeight() <= chatContainer.scrollTop() + chatContainer.innerHeight() * 0.2; // 20% from bottom of container
+                const isHoveringOver = chatContainer.matches(':hover')
+                // const isScrolledNearBottom = chatContainer.prop('scrollHeight') - chatContainer.innerHeight() <= chatContainer.scrollTop() + chatContainer.innerHeight() * 0.2; // 20% from bottom of container
                 $('#proxy-chat').append(message);
-                if (isScrolledNearBottom) {
+                if (!isHoveringOver) {
                     chatContainer.scrollTop(chatContainer.prop('scrollHeight') - chatContainer.innerHeight());
                     $('.chat-paused').hide();
                 } else {
@@ -232,9 +192,6 @@ ProxyChat = {
         chatLine.addClass('chat-line chat-line__message');
         chatLine.attr('data-user-id', message['user-id']);
         chatLine.attr('data-id', message.id);
-        ProxyChat.wrapBadges(message).forEach(badge => {
-            userInfo.append(badge);
-        });
         userInfo.append(ProxyChat.wrapUsername(message));
         userInfo.append(message.action ? '<span>&nbsp;</span>' : '<span class="colon">: </span>');
 
@@ -301,14 +258,17 @@ ProxyChat = {
                             ProxyChat.log(`Joined channel: ${ProxyChat.channel}`);
                             return;
                         case "CLEARMSG":
-                            if (message['target-msg-id']) ProxyChat.clearMessage(message['target-msg-id']);
+                            if (message['target-msg-id']) ProxyChat.softDelete(message['target-msg-id']);
                             return;
                         case "CLEARCHAT":
-                            if (message['target-user-id']) ProxyChat.clearAllMessages(message['target-user-id']);
+                            if (message['target-user-id']) ProxyChat.softDeleteAllMessages(message['target-user-id']);
                             return;
                         case "PRIVMSG":
                             if (message.channel.toLowerCase() !== ProxyChat.channel || !message.msg) return;
                             ProxyChat.writeChat(message);
+                            return;
+                        default:
+                            ProxyChat.log(`Unhandled command received: ${message.command}`);
                             return;
                     }
                 });

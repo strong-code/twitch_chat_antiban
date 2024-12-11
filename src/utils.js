@@ -31,28 +31,6 @@ async function getTwitchUserId(username) {
     return data;
 }
 
-async function getTwitchBadges(userId) {
-    const cachedBadges = await getFromStorage(userId.toString());
-    if (cachedBadges) {
-        const badges = JSON.parse(cachedBadges);
-        if (new Date().getTime() - badges.timestamp < 24 * 60 * 60 * 1000) {
-            console.log(`Twitch Anti-Ban: found badges (${userId}) in local storage`);
-            return badges.data;
-        }
-    }
-    const data = await fetchJson(
-        `https://%APIURL%/getTwitchBadges?user=${userId}`
-    );
-    if (data) {
-        await storeToStorage(userId, JSON.stringify({
-            data: data,
-            timestamp: new Date().getTime(),
-        }, null, 0));
-        console.log(`Twitch Anti-Ban: badges (${userId}) are stored in local storage`);
-    }
-    return data;
-}
-
 async function getFromStorage(key) {
     return new Promise((resolve) => {
         if (typeof browser !== 'undefined') {
