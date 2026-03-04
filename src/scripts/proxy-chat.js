@@ -4,6 +4,7 @@ ProxyChat = {
     channel: null,
     channelId: null,
     messages: [],
+    isHovering: false,
     thirdPartyEmotes: {},
     thirdPartyEmoteCodesByPriority: [],
     badges: {},
@@ -182,13 +183,19 @@ ProxyChat = {
 
     clearMessage: function (messageId) {
         setTimeout(function () {
-            $(`.chat-line[data-id=${messageId}]`).remove();
+            const messageElement = $(`.chat-line[data-id=${messageId}]`);
+            if (messageElement.length) {
+                messageElement.addClass('chat-line--deleted');
+            }
         }, 100);
     },
 
     clearAllMessages: function (userId) {
         setTimeout(function () {
-            $(`.chat-line[data-user-id=${userId}]`).remove();
+            const userMessages = $(`.chat-line[data-user-id=${userId}]`);
+            if (userMessages.length) {
+                userMessages.addClass('chat-line--deleted');
+            }
         }, 100);
     },
 
@@ -201,6 +208,14 @@ ProxyChat = {
         chatContainer.html(proxyChat);
         chatContainer.attr('style', 'display: block !important;');
         chatContainer.append(chatPaused);
+
+        chatContainer.on('mouseenter', function () {
+            ProxyChat.isHovering = true;
+        });
+        chatContainer.on('mouseleave', function () {
+            ProxyChat.isHovering = false;
+        });
+
         chatPaused.on("click", () => {
             const chatContainer = $('.chat-list--default');
             chatContainer.scrollTop(chatContainer.prop('scrollHeight') - chatContainer.innerHeight());
@@ -215,11 +230,13 @@ ProxyChat = {
                 const chatContainer = $('.chat-list--default');
                 const isScrolledNearBottom = chatContainer.prop('scrollHeight') - chatContainer.innerHeight() <= chatContainer.scrollTop() + chatContainer.innerHeight() * 0.2; // 20% from bottom of container
                 $('#anti-ban-chat').append(message);
-                if (isScrolledNearBottom) {
-                    chatContainer.scrollTop(chatContainer.prop('scrollHeight') - chatContainer.innerHeight());
-                    $('.anti-ban-chat-paused').hide();
-                } else {
-                    $('.anti-ban-chat-paused').show();
+                if (!ProxyChat.isHovering) {
+                    if (isScrolledNearBottom) {
+                        chatContainer.scrollTop(chatContainer.prop('scrollHeight') - chatContainer.innerHeight());
+                        $('.anti-ban-chat-paused').hide();
+                    } else {
+                        $('.anti-ban-chat-paused').show();
+                    }
                 }
             })
             ProxyChat.messages = [];
