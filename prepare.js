@@ -10,11 +10,8 @@ function prepareExtension() {
   const version = manifest.version;
 
   // 2. Create temp folders
-  const tempChromePath = path.join(__dirname, 'temp-chrome');
   const tempFirefoxPath = path.join(__dirname, 'temp-firefox');
-  fs.mkdirSync(tempChromePath);
   fs.mkdirSync(tempFirefoxPath);
-  copyFolderRecursiveSync(path.join(__dirname, 'src'), tempChromePath);
   copyFolderRecursiveSync(path.join(__dirname, 'src'), tempFirefoxPath);
 
   // 3. Combine manifest files in temp-firefox
@@ -24,16 +21,13 @@ function prepareExtension() {
   fs.writeFileSync(path.join(tempFirefoxPath, 'manifest.json'), JSON.stringify(firefoxManifest, null, 2));
 
   // 4. Delete manifest.firefox.json
-  fs.unlinkSync(path.join(tempChromePath, 'manifest.firefox.json'));
   fs.unlinkSync(path.join(tempFirefoxPath, 'manifest.firefox.json'));
 
   // 5. Replace external API
   const apiUrl = process.env.APIURL;
-  replaceTokens(tempChromePath, apiUrl);
   replaceTokens(tempFirefoxPath, apiUrl);
 
-  // 6. Archive extensions
-  archiveExtension(tempChromePath, `src-chrome-${version}.zip`, 'src');
+  // 6. Archive the Firefox extension
   archiveExtension(tempFirefoxPath, `src-firefox-${version}.zip`);
 }
 

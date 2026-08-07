@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "devDependencies": {
+    "archiver": "^5.3.2",
+    "rimraf": "^3.0.2"
+  }
+}

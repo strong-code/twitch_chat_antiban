@@ -18,6 +18,97 @@
 
 .inline-image {
     display: inline-flex;
+    vertical-align: middle;
+    max-width: 100%;
+}
+
+.chat-image__container {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(6rem, 100%);
+    max-width: 100%;
+    max-height: 6rem;
+    overflow: hidden;
+}
+
+.chat-image__container .chat-line__message--emote {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.anti-ban-chat-username {
+    cursor: pointer;
+}
+
+.anti-ban-chat-username:hover {
+    text-decoration: underline;
+}
+
+.anti-ban-chat-link {
+    color: #bf94ff;
+    text-decoration: underline;
+}
+
+.anti-ban-user-popup,
+.anti-ban-emote-tooltip {
+    z-index: 2147483647;
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    max-width: min(20em, calc(100vw - 1em));
+    padding: 0.75em;
+    border: 1px solid #464649;
+    border-radius: 0.4em;
+    color: #efeff1;
+    background: #18181b;
+    box-shadow: 0 0.25em 1em #0008;
+    font-size: 0.9rem;
+}
+
+.anti-ban-user-popup a {
+    color: #bf94ff;
+}
+
+.anti-ban-popup-close {
+    position: absolute;
+    top: 0.25em;
+    right: 0.4em;
+    border: 0;
+    color: #adadb8;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.25em;
+}
+
+.anti-ban-user-history {
+    max-height: 12em;
+    overflow-y: auto;
+    border-top: 1px solid #464649;
+    padding-top: 0.4em;
+}
+
+.anti-ban-user-history time {
+    color: #adadb8;
+    font-size: 0.8em;
+}
+
+.anti-ban-emote-tooltip {
+    align-items: center;
+}
+
+.anti-ban-emote-tooltip small {
+    color: #adadb8;
+}
+
+.anti-ban-emote-tooltip img {
+    max-width: 12em;
+    max-height: 12em;
 }
 
 .anti-ban-chat-paused {
@@ -35,6 +126,10 @@
     outline: 0.25rem solid;
 }
 
+.anti-ban-chat-paused span {
+    pointer-events: none;
+}
+
 #anti-ban-stream {
     width: 100%;
     height: 100%;
@@ -43,4 +138,4 @@
 #anti-ban-stream-player {
     width: 100%;
     height: 100%;
-} 
+}
