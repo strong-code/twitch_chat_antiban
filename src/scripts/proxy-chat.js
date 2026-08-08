@@ -233,23 +233,41 @@ ProxyChat = {
 
     wrapBadge: function (badgeData) {
         return `<div class="inline-image">
-                    <div class="chat-badge">
-                        <img class="chat-image" src="${badgeData.src1x}" srcset="${badgeData.src1x} 1x, ${badgeData.src4x} 4x"/>
+                    <div class="chat-badge" title="${badgeData.title}">
+                        <img class="chat-image" alt="${badgeData.title}" src="${badgeData.src1x}" srcset="${badgeData.src1x} 1x, ${badgeData.src4x} 4x"/>
                     </div>
                 </div>`;
     },
 
     wrapBadges: function (message) {
-        let badges = [];
-        if (message.badges) {
-            message.badges.split(',').forEach(badge => {
-                const badgeName = badge.split('/')[0];
-                const privilegedBadges = ['admin', 'staff', 'global_mod', 'broadcaster', 'moderator', 'lead_moderator'];
-                if (privilegedBadges.includes(badgeName) && badge in ProxyChat.badges) {
-                    const badgeData = ProxyChat.badges[badge];
-                    badges.push(ProxyChat.wrapBadge(badgeData));
-                }
-            });
+        const badges = [];
+        const privilegedBadges = new Set(['admin', 'staff', 'global_mod', 'broadcaster', 'moderator', 'lead_moderator']);
+        const badgeLabels = {
+            admin: 'Twitch admin',
+            staff: 'Twitch staff',
+            global_mod: 'Twitch global moderator',
+            broadcaster: 'Streamer',
+            moderator: 'Moderator',
+            lead_moderator: 'Lead moderator'
+        };
+
+        (message.badges || '').split(',').filter(Boolean).forEach(badge => {
+            const badgeName = badge.split('/')[0];
+            if (!privilegedBadges.has(badgeName) || !(badge in ProxyChat.badges)) return;
+            badges.push(ProxyChat.wrapBadge({
+                ...ProxyChat.badges[badge],
+                title: badgeLabels[badgeName] || badgeName
+            }));
+        });
+
+        // user-type is present on older IRC messages even when badge metadata is unavailable.
+        const role = message['user-type'];
+        if (role === 'staff' || role === 'admin' || role === 'mod') {
+            const badgeName = role === 'mod' ? 'moderator' : role;
+            if (!badges.length || !message.badges?.split(',').some(badge => badge.startsWith(`${badgeName}/`))) {
+                const badgeData = Object.entries(ProxyChat.badges).find(([key]) => key.startsWith(`${badgeName}/`))?.[1];
+                if (badgeData) badges.push(ProxyChat.wrapBadge({...badgeData, title: badgeLabels[badgeName]}));
+            }
         }
         return badges;
     },

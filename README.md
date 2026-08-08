@@ -7,3 +7,5 @@
 This extension automatically opens a proxy stream & chat to channels where you are banned.
 
 Download and install: [Chrome Web Store](https://chrome.google.com/webstore/detail/twitch-chat-anti-ban/ipnllhnoiiclnoonckahfcpahgehgdgb), [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/twitch-chat-anti-ban/)
+
+To test the Firefox build temporarily, run `APIURL=your-api-host node prepare.js`, then open `about:debugging#/runtime/this-firefox` and load `src-firefox-4.3.zip` with **Load Temporary Add-on**. Select the ZIP itself, not the `src` directory.

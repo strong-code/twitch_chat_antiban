@@ -11,13 +11,14 @@ function prepareExtension() {
 
   // 2. Create temp folders
   const tempFirefoxPath = path.join(__dirname, 'temp-firefox');
-  fs.mkdirSync(tempFirefoxPath);
+  fs.mkdirSync(tempFirefoxPath, { recursive: true });
   copyFolderRecursiveSync(path.join(__dirname, 'src'), tempFirefoxPath);
 
   // 3. Combine manifest files in temp-firefox
   const firefoxManifestTemplate = JSON.parse(fs.readFileSync(path.join(tempFirefoxPath, 'manifest.firefox.json'), 'utf8'));
   const firefoxManifest = combineManifests(manifest, firefoxManifestTemplate);
   delete firefoxManifest.action;
+  delete firefoxManifest.service_worker;
   fs.writeFileSync(path.join(tempFirefoxPath, 'manifest.json'), JSON.stringify(firefoxManifest, null, 2));
 
   // 4. Delete manifest.firefox.json
