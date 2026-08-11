@@ -65,12 +65,96 @@
     text-decoration: underline;
 }
 
+.chat-line--reply {
+    border-left: 0.15em solid #2d2d33;
+    padding-left: 0.4em;
+}
+
+.anti-ban-chat-reply {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    margin: 0.1em 0;
+    font-size: 0.9em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.anti-ban-chat-reply-arrow {
+    flex-shrink: 0;
+    color: #adadb8;
+}
+
+.anti-ban-chat-reply-content {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35em;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.anti-ban-chat-reply-author {
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+.anti-ban-chat-reply-snippet {
+    color: #adadb8;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.anti-ban-chat-thread-button {
+    display: none;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.1em 0.5em;
+    border: 1px solid #464649;
+    border-radius: 0.33em;
+    color: #bf94ff;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.anti-ban-chat-reply:hover .anti-ban-chat-thread-button {
+    display: inline-block;
+}
+
+.anti-ban-thread-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    max-height: 20em;
+    overflow-y: auto;
+    border-top: 1px solid #464649;
+    padding-top: 0.4em;
+}
+
+.anti-ban-thread-line {
+    word-break: break-word;
+}
+
+.anti-ban-thread-messages time {
+    color: #adadb8;
+    font-size: 0.8em;
+}
+
+.anti-ban-chat-thread-highlight {
+    background: #bf94ff22;
+    border-radius: 0.25em;
+}
+
 .anti-ban-chat-link {
     color: #bf94ff;
     text-decoration: underline;
 }
 
 .anti-ban-user-popup,
+.anti-ban-thread-popup,
 .anti-ban-emote-tooltip {
     z-index: 2147483647;
     position: fixed;
@@ -85,10 +169,31 @@
     background: #18181b;
     box-shadow: 0 0.25em 1em #0008;
     font-size: 0.9rem;
+    cursor: grab;
 }
 
-.anti-ban-user-popup a {
+.anti-ban-user-popup,
+.anti-ban-thread-popup {
+    user-select: none;
+}
+
+.anti-ban-user-popup button,
+.anti-ban-user-popup a,
+.anti-ban-user-popup .anti-ban-user-history,
+.anti-ban-thread-popup button,
+.anti-ban-thread-popup a,
+.anti-ban-thread-popup .anti-ban-thread-messages,
+.anti-ban-thread-popup .anti-ban-chat-username {
+    cursor: pointer;
+}
+
+.anti-ban-user-popup a,
+.anti-ban-thread-popup a {
     color: #bf94ff;
+}
+
+.anti-ban-thread-popup {
+    max-width: min(32em, calc(100vw - 1em));
 }
 
 .anti-ban-popup-close {
@@ -125,6 +230,23 @@
 .anti-ban-emote-tooltip img {
     max-width: 12em;
     max-height: 12em;
+}
+
+.anti-ban-image-preview {
+    z-index: 2147483647;
+    position: fixed;
+    padding: 0.5em;
+    border: 1px solid #464649;
+    border-radius: 0.4em;
+    background: #18181b;
+    box-shadow: 0 0.25em 1em #0008;
+}
+
+.anti-ban-image-preview img {
+    display: block;
+    max-width: min(24em, calc(100vw - 2em));
+    max-height: min(24em, calc(100vh - 2em));
+    border-radius: 0.2em;
 }
 
 .anti-ban-chat-paused {

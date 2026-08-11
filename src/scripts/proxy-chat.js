@@ -7,8 +7,12 @@ ProxyChat = {
     isHovering: false,
     isScrolledUp: false,
     userMessages: {},
+    userInfo: {},
+    messageById: {},
+    threadSeq: 0,
     thirdPartyEmotes: {},
     thirdPartyEmoteCodesByPriority: [],
+    thirdPartyEmotePattern: null,
     badges: {},
     pingIntervalID: null,
 
@@ -37,6 +41,7 @@ ProxyChat = {
         for (const endpoint of ['emotes/global', `users/twitch/${ProxyChat.channelId}`]) {
             const ffzEmotes = await fetchJson(`https://api.betterttv.net/3/cached/frankerfacez/${endpoint}`);
             (ffzEmotes ?? []).forEach(emote => {
+                if (!emote?.code || !emote.images) return;
                 ProxyChat.thirdPartyEmotes[emote.code] = {
                     id: emote.id,
                     src: emote.images['4x'] || emote.images['2x'] || emote.images['1x']
@@ -46,8 +51,9 @@ ProxyChat = {
 
         for (const endpoint of ['emotes/global', `users/twitch/${ProxyChat.channelId}`]) {
             let bttvEmotes = await fetchJson(`https://api.betterttv.net/3/cached/${endpoint}`);
-            bttvEmotes = Array.isArray(bttvEmotes) ? bttvEmotes : bttvEmotes?.channelEmotes.concat(bttvEmotes?.sharedEmotes) ?? [];
-            bttvEmotes?.forEach(emote => {
+            bttvEmotes = Array.isArray(bttvEmotes) ? bttvEmotes : [].concat(bttvEmotes?.channelEmotes ?? [], bttvEmotes?.sharedEmotes ?? []);
+            (bttvEmotes ?? []).forEach(emote => {
+                if (!emote?.code) return;
                 ProxyChat.thirdPartyEmotes[emote.code] = {
                     id: emote.id,
                     src: `https://cdn.betterttv.net/emote/${emote.id}/3x`
@@ -58,30 +64,33 @@ ProxyChat = {
         for (const endpoint of ['emote-sets/global', `users/twitch/${ProxyChat.channelId}`]) {
             const stvEmotes = await fetchJson(`https://7tv.io/v3/${endpoint}`);
             const emotes = stvEmotes?.emote_set?.emotes ?? stvEmotes?.emotes ?? [];
-            emotes?.forEach(emote => {
-                if (emote?.data?.host?.files?.length && emote.data.host.url?.trim()) {
-                    const files = emote.data.host.files;
-                    const bestQualityEmote = files.reduce((best, file) => {
-                        return !best || (file.width * file.height > best.width * best.height) ? file : best;
-                    }, null);
-                    const lowestQualityEmote = files.reduce((smallest, file) => {
-                        return !smallest || (file.width * file.height < smallest.width * smallest.height) ? file : smallest;
-                    }, null);
-                    ProxyChat.thirdPartyEmotes[emote.name] = {
-                        id: emote.id,
-                        src: `https:${emote.data.host.url}/${bestQualityEmote.name}`,
-                        width: `${lowestQualityEmote.width / 10}rem`,
-                        height: `${lowestQualityEmote.height / 10}rem`,
-                        aspectRatio: `${lowestQualityEmote.width} / ${lowestQualityEmote.height}`,
-                        scaleToChat: true
-                    };
-                }
+            (emotes ?? []).forEach(emote => {
+                if (!emote?.name || !emote?.data?.host?.files?.length || !emote.data.host.url?.trim()) return;
+                const files = emote.data.host.files;
+                const bestQualityEmote = files.reduce((best, file) => {
+                    return !best || (file.width * file.height > best.width * best.height) ? file : best;
+                }, null);
+                const lowestQualityEmote = files.reduce((smallest, file) => {
+                    return !smallest || (file.width * file.height < smallest.width * smallest.height) ? file : smallest;
+                }, null);
+                if (!bestQualityEmote || !lowestQualityEmote) return;
+                ProxyChat.thirdPartyEmotes[emote.name] = {
+                    id: emote.id,
+                    src: `https:${emote.data.host.url}/${bestQualityEmote.name}`,
+                    width: `${lowestQualityEmote.width / 10}rem`,
+                    height: `${lowestQualityEmote.height / 10}rem`,
+                    aspectRatio: `${lowestQualityEmote.width} / ${lowestQualityEmote.height}`,
+                    scaleToChat: true
+                };
             });
         }
 
         // store emotes priority by its length
-        ProxyChat.thirdPartyEmoteCodesByPriority = Object.keys(ProxyChat.thirdPartyEmotes);
+        ProxyChat.thirdPartyEmoteCodesByPriority = Object.keys(ProxyChat.thirdPartyEmotes).filter(code => code && code.trim());
         ProxyChat.thirdPartyEmoteCodesByPriority.sort((a, b) => b.length - a.length);
+        ProxyChat.thirdPartyEmotePattern = ProxyChat.thirdPartyEmoteCodesByPriority.length
+            ? new RegExp(`(^|\\s)(?:${ProxyChat.thirdPartyEmoteCodesByPriority.map(escapeRegExp).join('|')})(?=\\s|$)`, 'g')
+            : null;
     },
 
     parseTwitchBadges: function (badgeData) {
@@ -99,99 +108,154 @@ ProxyChat = {
     replaceTwitchEmotes: function (message) {
         if (!message.emotes) return $('<span>').text(message.msg);
         const fragment = $('<span>');
-        let cursor = 0;
-        const emoteCodes = {};
+        const matches = [];
 
         message.emotes.split("/").forEach((emote) => {
             const [emoteIndex, ranges] = emote.split(":");
             ranges.split(",").forEach((range) => {
                 const [start, end] = range.split("-");
-                const emoteCode = message.msg.substring(parseInt(start), parseInt(end) + 1);
-                emoteCodes[emoteCode] = {
-                    id: emoteIndex,
-                    name: emoteCode,
-                    provider: 'Twitch',
-                    src: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteIndex}/default/dark/1.0`,
-                    hoverSrc: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteIndex}/default/dark/3.0`
-                };
+                const startIndex = parseInt(start);
+                const endIndex = parseInt(end);
+                matches.push({
+                    start: startIndex,
+                    end: endIndex,
+                    data: {
+                        id: emoteIndex,
+                        name: message.msg.substring(startIndex, endIndex + 1),
+                        provider: 'Twitch',
+                        src: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteIndex}/default/dark/1.0`,
+                        hoverSrc: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteIndex}/default/dark/3.0`
+                    }
+                });
             });
         });
 
-        const matches = Object.keys(emoteCodes)
-            .map(code => ({code, index: message.msg.indexOf(code), data: emoteCodes[code]}))
-            .filter(match => match.index >= 0)
-            .sort((a, b) => a.index - b.index);
+        matches.sort((a, b) => a.start - b.start);
+        let cursor = 0;
         matches.forEach(match => {
-            if (match.index < cursor) return;
-            fragment.append(document.createTextNode(message.msg.substring(cursor, match.index)));
+            if (match.start < cursor) return;
+            fragment.append(document.createTextNode(message.msg.substring(cursor, match.start)));
             fragment.append($(ProxyChat.wrapEmote(match.data))[0]);
-            cursor = match.index + match.code.length;
+            cursor = match.end + 1;
         });
         fragment.append(document.createTextNode(message.msg.substring(cursor)));
         return fragment;
     },
 
-    replaceThirdPartyEmotes: function (messageElement, msg) {
-        const text = msg.text();
-        if (!text) return;
-        for (const code of ProxyChat.thirdPartyEmoteCodesByPriority) {
-            const regex = new RegExp(`(^|\\s)${escapeRegExp(code)}(?=\\s|$)`);
-            const match = regex.exec(text);
-            if (!match) continue;
-            const index = match.index + match[1].length;
-            const replacement = $(ProxyChat.wrapEmote({
-                ...ProxyChat.thirdPartyEmotes[code],
-                name: code,
-                provider: 'Third-party'
-            }))[0];
-            messageElement.empty().append(
-                document.createTextNode(text.substring(0, index)),
-                replacement,
-                document.createTextNode(text.substring(index + code.length))
-            );
-            ProxyChat.replaceThirdPartyEmotes(messageElement, messageElement);
-            return;
-        }
+    replaceThirdPartyEmotes: function (messageElement) {
+        const pattern = ProxyChat.thirdPartyEmotePattern;
+        if (!pattern) return;
+        messageElement.contents().each(function () {
+            if (this.nodeType !== 3) return;
+            const text = this.nodeValue;
+            if (!text) return;
+            let didReplace = false;
+            let lastIndex = 0;
+            const parts = [];
+            pattern.lastIndex = 0;
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const code = match[0].substring(match[1].length);
+                parts.push(text.substring(lastIndex, match.index + match[1].length));
+                parts.push($(ProxyChat.wrapEmote({
+                    ...ProxyChat.thirdPartyEmotes[code],
+                    name: code,
+                    provider: 'Third-party'
+                }))[0]);
+                lastIndex = match.index + match[1].length + code.length;
+                didReplace = true;
+            }
+            if (didReplace) {
+                parts.push(text.substring(lastIndex));
+                ProxyChat.replaceTextNode(this, parts);
+            }
+        });
     },
 
     replaceMentions: function (messageElement) {
-        const text = messageElement.text();
-        if (!text) return;
-        const mention = /(^|\s)@([a-zA-Z0-9_]{1,25})\b/.exec(text);
-        if (!mention) return;
-        const start = mention.index + mention[1].length;
-        const username = mention[2];
-        const replacement = $('<span class="anti-ban-chat-mention anti-ban-chat-username">')
-            .attr({
-                'data-user-id': username,
-                'data-username': username
-            })
-            .text(`@${username}`)[0];
-        messageElement.empty().append(
-            document.createTextNode(text.substring(0, start)),
-            replacement,
-            document.createTextNode(text.substring(start + username.length + 1))
-        );
-        ProxyChat.replaceMentions(messageElement);
+        const pattern = /(^|\s)(@?[a-zA-Z0-9_]{1,25})\b/g;
+        messageElement.contents().each(function () {
+            if (this.nodeType !== 3) return;
+            const text = this.nodeValue;
+            if (!text) return;
+            let didReplace = false;
+            let lastIndex = 0;
+            const parts = [];
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const isAtMention = match[2].charAt(0) === '@';
+                const username = isAtMention ? match[2].slice(1) : match[2];
+                const login = username.toLowerCase();
+                const user = ProxyChat.userInfo[login] || {};
+                if (!isAtMention && (!ProxyChat.userInfo[login] || !ProxyChat.isStandaloneUsername(text, match))) {
+                    continue;
+                }
+                const color = user.color || twitchColors[(user.displayName || username).charCodeAt(0) % 16];
+                parts.push(text.substring(lastIndex, match.index + match[1].length));
+                parts.push($('<span class="anti-ban-chat-mention anti-ban-chat-username">')
+                    .attr({
+                        'data-user-id': user.userId || login,
+                        'data-username': login,
+                        'data-display-name': user.displayName || username
+                    })
+                    .css('color', color)
+                    .text(match[2])[0]);
+                lastIndex = match.index + match[1].length + match[2].length;
+                didReplace = true;
+            }
+            if (didReplace) {
+                parts.push(text.substring(lastIndex));
+                ProxyChat.replaceTextNode(this, parts);
+            }
+        });
+    },
+
+    isStandaloneUsername: function (text, match) {
+        const end = match.index + match[1].length + match[2].length;
+        const after = text[end];
+        if (after === '@' || after === ':') return false;
+        if (after === '.' && /[a-zA-Z0-9]/.test(text[end + 1] || '')) return false;
+        return true;
     },
 
     replaceUrls: function (messageElement) {
-        const text = messageElement.text();
-        if (!text) return;
-        const url = /(?:(?:https?:\/\/|www\.)|(?:[a-z0-9-]+\.)+[a-z]{2,})(?:[^\s<]*)/i.exec(text);
-        if (!url) return;
-        const value = url[0].replace(/[.,!?;:)]+$/, '');
-        const href = /^(?:https?:\/\/)/i.test(value) ? value : `https://${value}`;
-        const start = url.index;
-        const link = $('<a class="anti-ban-chat-link" target="_blank" rel="noopener noreferrer">')
-            .attr('href', href)
-            .text(value)[0];
-        messageElement.empty().append(
-            document.createTextNode(text.substring(0, start)),
-            link,
-            document.createTextNode(text.substring(start + value.length))
-        );
-        ProxyChat.replaceUrls(messageElement);
+        const pattern = /(?:(?:https?:\/\/|www\.)|(?:[a-z0-9-]+\.)+[a-z]{2,})(?:[^\s<]*)/i;
+        messageElement.contents().each(function () {
+            if (this.nodeType !== 3) return;
+            const text = this.nodeValue;
+            if (!text) return;
+            let didReplace = false;
+            let lastIndex = 0;
+            const parts = [];
+            let match;
+            while ((match = pattern.exec(text.substring(lastIndex))) !== null) {
+                const value = match[0].replace(/[.,!?;:)]+$/, '');
+                if (!value) {
+                    lastIndex += match[0].length;
+                    continue;
+                }
+                const start = lastIndex + match.index;
+                parts.push(text.substring(lastIndex, start));
+                const href = /^(?:https?:\/\/)/i.test(value) ? value : `https://${value}`;
+                parts.push($('<a class="anti-ban-chat-link" target="_blank" rel="noopener noreferrer">')
+                    .attr('href', href)
+                    .text(value)[0]);
+                lastIndex = start + value.length;
+                didReplace = true;
+            }
+            if (didReplace) {
+                parts.push(text.substring(lastIndex));
+                ProxyChat.replaceTextNode(this, parts);
+            }
+        });
+    },
+
+    replaceTextNode: function (textNode, parts) {
+        const parent = textNode.parentNode;
+        parts.forEach(part => {
+            parent.insertBefore(typeof part === 'string' ? document.createTextNode(part) : part, textNode);
+        });
+        parent.removeChild(textNode);
     },
 
     wrapUsername: function (message) {
@@ -213,8 +277,8 @@ ProxyChat = {
             const color = message.color || this.twitchColors[message['display-name'].charCodeAt(0) % 16];
             messageElement.css('color', color);
         }
-        messageElement.append(ProxyChat.replaceTwitchEmotes(message));
-        ProxyChat.replaceThirdPartyEmotes(messageElement, messageElement);
+        messageElement.append(ProxyChat.replaceTwitchEmotes(message).contents());
+        ProxyChat.replaceThirdPartyEmotes(messageElement);
         ProxyChat.replaceMentions(messageElement);
         ProxyChat.replaceUrls(messageElement);
         return messageElement;
@@ -270,6 +334,19 @@ ProxyChat = {
             }
         }
         return badges;
+    },
+
+    trackUser: function (message) {
+        const login = (message.login || message.source?.nickname || '').toLowerCase();
+        if (!login) return;
+        const user = ProxyChat.userInfo[login] = ProxyChat.userInfo[login] || {};
+        const colorChanged = message.color && user.color !== message.color;
+        if (message['user-id']) user.userId = message['user-id'];
+        if (message.color) user.color = message.color;
+        if (message['display-name']) user.displayName = message['display-name'];
+        if (colorChanged) {
+            $(`.anti-ban-chat-mention[data-username="${login}"]`).css('color', message.color);
+        }
     },
 
     log: function (message) {
@@ -328,11 +405,33 @@ ProxyChat = {
             event.stopPropagation();
             ProxyChat.showUserPopup($(this));
         });
+        chatContainer.on('click', '.anti-ban-chat-thread-button', function (event) {
+            event.stopPropagation();
+            ProxyChat.showThreadPopup($(this).closest('.anti-ban-chat-reply'));
+        });
+        chatContainer.on('click', '.anti-ban-chat-reply', function () {
+            const parentId = $(this).attr('data-reply-parent-id');
+            if (!parentId) return;
+            const container = $('.chat-list--default');
+            const parent = container.find(`.chat-line[data-id="${parentId}"]`);
+            if (!parent.length) return;
+            const containerTop = container[0].getBoundingClientRect().top;
+            const elementTop = parent[0].getBoundingClientRect().top;
+            container.scrollTop(container.scrollTop() + (elementTop - containerTop) - container.innerHeight() * 0.3);
+            parent.addClass('anti-ban-chat-thread-highlight');
+            setTimeout(() => parent.removeClass('anti-ban-chat-thread-highlight'), 2000);
+        });
         chatContainer.on('mouseenter', '.anti-ban-emote', function () {
             ProxyChat.showEmoteTooltip($(this));
         });
         chatContainer.on('mouseleave', '.anti-ban-emote', function () {
             ProxyChat.hideEmoteTooltip();
+        });
+        chatContainer.on('mouseenter', '.anti-ban-chat-link', function () {
+            ProxyChat.showImagePreview($(this));
+        });
+        chatContainer.on('mouseleave', '.anti-ban-chat-link', function () {
+            ProxyChat.hideImagePreview();
         });
 
         chatPaused.on("click", () => {
@@ -369,14 +468,22 @@ ProxyChat = {
         chatLine.addClass('chat-line chat-line__message');
         chatLine.attr('data-user-id', message['user-id']);
         chatLine.attr('data-id', message.id);
-        const userId = message['user-id'] || message.source?.nickname || 'unknown';
-        ProxyChat.userMessages[userId] = ProxyChat.userMessages[userId] || [];
+        ProxyChat.trackUser(message);
+        const login = (message.login || message.source?.nickname || '').toLowerCase();
+        const userKey = login || message['user-id'] || 'unknown';
+        ProxyChat.userMessages[userKey] = ProxyChat.userMessages[userKey] || [];
         const renderedMessage = ProxyChat.wrapMessage(message);
-        ProxyChat.userMessages[userId].push({
+        ProxyChat.userMessages[userKey].push({
             html: renderedMessage.html(),
             time: new Date().toLocaleTimeString()
         });
-        ProxyChat.userMessages[userId] = ProxyChat.userMessages[userId].slice(-10);
+        ProxyChat.userMessages[userKey] = ProxyChat.userMessages[userKey].slice(-10);
+
+        const reply = ProxyChat.wrapReply(message);
+        if (reply) {
+            chatLine.addClass('chat-line--reply');
+            chatLine.append(reply);
+        }
         ProxyChat.wrapBadges(message).forEach(badge => {
             userInfo.append(badge);
         });
@@ -384,20 +491,139 @@ ProxyChat = {
         userInfo.append(message.action ? '<span>&nbsp;</span>' : '<span class="colon">: </span>');
 
         chatLine.append(userInfo);
-        chatLine.append(ProxyChat.wrapMessage(message));
+        chatLine.append(renderedMessage);
+        ProxyChat.storeMessage(message, renderedMessage);
         ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
     },
 
+    wrapReply: function (message) {
+        const parentId = message['reply-parent-msg-id'];
+        if (!parentId) return null;
+        const parent = ProxyChat.messageById[parentId];
+        const login = parent?.login || (message['reply-parent-user-login'] || '').toLowerCase();
+        const displayName = parent?.displayName || message['reply-parent-display-name'] || login || 'User';
+        const color = parent?.color || twitchColors[(displayName || login).charCodeAt(0) % 16];
+        const reply = $('<span class="anti-ban-chat-reply">').attr('data-reply-parent-id', parentId);
+        const content = $('<span class="anti-ban-chat-reply-content"></span>');
+        const author = $('<span class="anti-ban-chat-reply-author anti-ban-chat-username"></span>')
+            .attr({
+                'data-user-id': parent?.userId || login,
+                'data-username': login,
+                'data-display-name': displayName
+            })
+            .css('color', color)
+            .text(displayName);
+        content.append(author);
+        if (parent?.text) {
+            content.append($('<span class="anti-ban-chat-reply-snippet">').text(parent.text));
+        }
+        reply.append($('<span class="anti-ban-chat-reply-arrow">↩</span>'), content);
+        reply.append($('<button class="anti-ban-chat-thread-button" type="button">').text('View thread'));
+        return reply;
+    },
+
+    storeMessage: function (message, renderedMessage) {
+        if (!message.id) return;
+        const parentId = message['reply-parent-msg-id'] || null;
+        ProxyChat.messageById[message.id] = {
+            id: message.id,
+            seq: ++ProxyChat.threadSeq,
+            parentId,
+            login: (message.login || message.source?.nickname || '').toLowerCase(),
+            userId: message['user-id'] || '',
+            displayName: message['display-name'] || message.login || message.source?.nickname || '',
+            color: message.color || '',
+            text: message.msg,
+            html: renderedMessage.html(),
+            time: new Date().toLocaleTimeString(),
+            children: []
+        };
+        if (parentId && ProxyChat.messageById[parentId]) {
+            ProxyChat.messageById[parentId].children.push(message.id);
+        }
+        const keys = Object.keys(ProxyChat.messageById);
+        if (keys.length > 400) {
+            keys.slice(0, keys.length - 300).forEach(key => delete ProxyChat.messageById[key]);
+        }
+    },
+
+    buildThread: function (messageId) {
+        const messages = [];
+        let node = ProxyChat.messageById[messageId];
+        if (!node) return messages;
+        while (node.parentId && ProxyChat.messageById[node.parentId]) {
+            node = ProxyChat.messageById[node.parentId];
+        }
+        const queue = [node.id];
+        const seen = new Set([node.id]);
+        while (queue.length) {
+            const current = ProxyChat.messageById[queue.shift()];
+            if (!current) continue;
+            messages.push(current);
+            (current.children || []).forEach(childId => {
+                if (!seen.has(childId) && ProxyChat.messageById[childId]) {
+                    seen.add(childId);
+                    queue.push(childId);
+                }
+            });
+        }
+        messages.sort((a, b) => a.seq - b.seq);
+        return messages;
+    },
+
+    showThreadPopup: function (replyElement) {
+        $('.anti-ban-user-popup, .anti-ban-thread-popup').remove();
+        const messageId = replyElement.closest('.chat-line').attr('data-id');
+        const messages = ProxyChat.buildThread(messageId);
+        const popup = $('<div class="anti-ban-thread-popup">');
+        popup.append($('<button class="anti-ban-popup-close" type="button">').text('×'));
+        popup.append($('<strong>').text(`Thread (${messages.length})`));
+        const thread = $('<div class="anti-ban-thread-messages">');
+        messages.forEach(item => {
+            const color = item.color || twitchColors[(item.displayName || item.login || '').charCodeAt(0) % 16];
+            const name = $('<span class="anti-ban-chat-username"></span>')
+                .attr({
+                    'data-user-id': item.userId || item.login,
+                    'data-username': item.login,
+                    'data-display-name': item.displayName
+                })
+                .css('color', color)
+                .text(item.displayName);
+            thread.append($('<div class="anti-ban-thread-line"></div>').append(
+                $('<time>').text(`${item.time} `),
+                name,
+                $('<span class="colon">: </span>'),
+                $('<span>').html(item.html)
+            ));
+        });
+        popup.append(thread);
+        popup.on('click', '.anti-ban-popup-close', () => popup.remove());
+        popup.on('click', '.anti-ban-chat-username', function (event) {
+            event.stopPropagation();
+            ProxyChat.showUserPopup($(this));
+        });
+        $('body').append(popup);
+        const rect = replyElement[0].getBoundingClientRect();
+        popup.css({
+            top: `${Math.min(rect.bottom, window.innerHeight - popup.outerHeight() - 8)}px`,
+            left: `${Math.min(rect.left, window.innerWidth - popup.outerWidth() - 8)}px`
+        });
+        setTimeout(() => { thread[0].scrollTop = thread[0].scrollHeight; }, 0);
+        ProxyChat.makeDraggable(popup);
+    },
+
     showUserPopup: function (usernameElement) {
-        $('.anti-ban-user-popup').remove();
-        const userId = usernameElement.attr('data-user-id') || usernameElement.attr('data-username');
-        const username = usernameElement.attr('data-username') || usernameElement.text();
+        $('.anti-ban-user-popup, .anti-ban-thread-popup').remove();
+        const login = (usernameElement.attr('data-username') || '').toLowerCase();
+        const userId = usernameElement.attr('data-user-id');
+        const user = ProxyChat.userInfo[login] || {};
+        const displayName = usernameElement.attr('data-display-name') || user.displayName || login || usernameElement.text().replace(/^@/, '');
         const popup = $('<div class="anti-ban-user-popup">');
         popup.append($('<button class="anti-ban-popup-close" type="button">').text('×'));
-        popup.append($('<strong>').text(username));
-        popup.append($('<a target="_blank" rel="noopener noreferrer">').attr('href', `https://www.twitch.tv/${encodeURIComponent(username)}`).text('View Twitch profile'));
+        popup.append($('<strong>').text(displayName));
+        popup.append($('<a target="_blank" rel="noopener noreferrer">').attr('href', `https://www.twitch.tv/${encodeURIComponent(login || displayName)}`).text('View Twitch profile'));
         const history = $('<div class="anti-ban-user-history">');
-        (ProxyChat.userMessages[userId] || []).forEach(item => {
+        (ProxyChat.userMessages[login || userId || 'unknown'] || []).forEach(item => {
             history.append($('<div>').append($('<time>').text(`${item.time} `), $('<span>').html(item.html)));
         });
         popup.append(history);
@@ -405,6 +631,7 @@ ProxyChat = {
         const rect = usernameElement[0].getBoundingClientRect();
         popup.css({top: `${Math.min(rect.bottom, window.innerHeight - popup.outerHeight() - 8)}px`, left: `${Math.min(rect.left, window.innerWidth - popup.outerWidth() - 8)}px`});
         popup.on('click', '.anti-ban-popup-close', () => popup.remove());
+        ProxyChat.makeDraggable(popup);
     },
 
     showEmoteTooltip: function (emoteElement) {
@@ -423,12 +650,88 @@ ProxyChat = {
         $('.anti-ban-emote-tooltip').remove();
     },
 
+    isImageUrl: function (url) {
+        try {
+            const pathname = new URL(url).pathname;
+            return /\.(jpe?g|png|gif|webp|svg|bmp|ico|tiff?|avif)$/i.test(pathname);
+        } catch {
+            return /\.(jpe?g|png|gif|webp|svg|bmp|ico|tiff?|avif)(\?.*)?$/i.test(url);
+        }
+    },
+
+    showImagePreview: function (linkElement) {
+        ProxyChat.hideImagePreview();
+        const url = linkElement.attr('href');
+        if (!url || !ProxyChat.isImageUrl(url)) return;
+        const preview = $('<div class="anti-ban-image-preview">');
+        const img = $('<img>').attr({ src: url, alt: 'Preview' });
+        img.on('error', function () { preview.remove(); });
+        img.on('load', function () {
+            const rect = linkElement[0].getBoundingClientRect();
+            const pw = preview.outerWidth();
+            const ph = preview.outerHeight();
+            let top = rect.top - ph - 8;
+            if (top < 8) top = rect.bottom + 8;
+            let left = rect.left;
+            if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+            if (left < 8) left = 8;
+            preview.css({ top: `${top}px`, left: `${left}px` });
+        });
+        preview.append(img);
+        $('body').append(preview);
+        const rect = linkElement[0].getBoundingClientRect();
+        preview.css({ top: `${rect.bottom + 8}px`, left: `${rect.left}px` });
+    },
+
+    hideImagePreview: function () {
+        $('.anti-ban-image-preview').remove();
+    },
+
+    makeDraggable: function (popup) {
+        let dragging = false;
+        let startX, startY, origLeft, origTop;
+        
+        popup.on('mousedown', function (e) {
+            const target = e.target;
+            if ($(target).is('button, a, .anti-ban-user-history, .anti-ban-thread-messages, .anti-ban-chat-username')) return;
+            e.preventDefault();
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = popup[0].getBoundingClientRect();
+            origLeft = rect.left;
+            origTop = rect.top;
+            popup.css('cursor', 'grabbing');
+        });
+        
+        $(document).on('mousemove.draggable', function (e) {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const newLeft = Math.max(0, Math.min(origLeft + dx, window.innerWidth - popup.outerWidth()));
+            const newTop = Math.max(0, Math.min(origTop + dy, window.innerHeight - popup.outerHeight()));
+            popup.css({ left: `${newLeft}px`, top: `${newTop}px` });
+        });
+        
+        $(document).on('mouseup.draggable', function () {
+            if (!dragging) return;
+            dragging = false;
+            popup.css('cursor', '');
+            $(document).off('mousemove.draggable mouseup.draggable');
+        });
+    },
+
     connect: function (channel) {
         if (ProxyChat.socket) {
             ProxyChat.socket.onclose = function () {};
             ProxyChat.disconnect();
         }
-        ProxyChat.channel = channel.toLowerCase();
+        const channelName = channel.toLowerCase();
+        if (ProxyChat.channel !== channelName) {
+            ProxyChat.userInfo = {};
+            ProxyChat.messageById = {};
+        }
+        ProxyChat.channel = channelName;
 
         let disconnectTimeout;
         let lastDisconnectedTime = null;
