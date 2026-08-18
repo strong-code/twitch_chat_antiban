@@ -305,14 +305,15 @@ ProxyChat = {
 
     wrapBadges: function (message) {
         const badges = [];
-        const privilegedBadges = new Set(['admin', 'staff', 'global_mod', 'broadcaster', 'moderator', 'lead_moderator']);
+        const privilegedBadges = new Set(['admin', 'staff', 'global_mod', 'broadcaster', 'moderator', 'lead_moderator', 'partner']);
         const badgeLabels = {
             admin: 'Twitch admin',
             staff: 'Twitch staff',
             global_mod: 'Twitch global moderator',
             broadcaster: 'Streamer',
             moderator: 'Moderator',
-            lead_moderator: 'Lead moderator'
+            lead_moderator: 'Lead moderator',
+            partner: 'Verified streamer'
         };
 
         (message.badges || '').split(',').filter(Boolean).forEach(badge => {
