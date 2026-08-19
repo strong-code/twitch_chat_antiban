@@ -37,7 +37,9 @@ async function getTwitchBadges(userId) {
     const cachedBadges = await getFromStorage(userId.toString());
     if (cachedBadges) {
         const badges = JSON.parse(cachedBadges);
-        if (new Date().getTime() - badges.timestamp < 24 * 60 * 60 * 1000) {
+        // badge data is near-static, so keep it for a week instead of re-rolling
+        // a slow/failing fetch (the global response stalls past API Gateway's timeout)
+        if (new Date().getTime() - badges.timestamp < 7 * 24 * 60 * 60 * 1000) {
             console.log(`Twitch Anti-Ban: found badges (${userId}) in local storage`);
             return badges.data;
         }
@@ -52,7 +54,7 @@ async function getTwitchBadges(userId) {
         }, null, 0));
         console.log(`Twitch Anti-Ban: badges (${userId}) are stored in local storage`);
     }
-    return data;
+    return data ?? (cachedBadges ? JSON.parse(cachedBadges).data : null);
 }
 
 async function getTwitchStreamPlaylist(channel) {
