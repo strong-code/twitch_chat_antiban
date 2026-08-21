@@ -376,6 +376,51 @@ ProxyChat = {
         }, 100);
     },
 
+    formatDuration: function (seconds) {
+        const s = parseInt(seconds, 10);
+        if (isNaN(s)) return `${seconds}s`;
+        if (s < 60) return `${s} second${s !== 1 ? 's' : ''}`;
+        if (s < 3600) {
+            const m = Math.floor(s / 60);
+            const rem = s % 60;
+            return rem ? `${m}m ${rem}s` : `${m} minute${m !== 1 ? 's' : ''}`;
+        }
+        if (s < 86400) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            return m ? `${h}h ${m}m` : `${h} hour${h !== 1 ? 's' : ''}`;
+        }
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        return h ? `${d}d ${h}h` : `${d} day${d !== 1 ? 's' : ''}`;
+    },
+
+    writeBanNotice: function (message) {
+        const login = (message.msg || '').trim();
+        const targetUserId = message['target-user-id'] || '';
+        const duration = message['ban-duration'];
+        const rawReason = message['ban-reason'] || '';
+        const reason = rawReason ? decodeURIComponent(rawReason.replace(/\\s/g, ' ')) : '';
+        const info = ProxyChat.userInfo[login.toLowerCase()] || {};
+        const displayName = info.displayName || login || `user:${targetUserId}`;
+        const time = new Date().toLocaleTimeString();
+        const chatLine = $('<div></div>');
+        chatLine.addClass('chat-line anti-ban-system-message anti-ban-ban-notice');
+        const timeEl = $('<span>').text(`[${time}] `).css({color: '#adadb8', fontSize: '0.8em'});
+        let text;
+        if (duration) {
+            text = `${displayName} was timed out for ${ProxyChat.formatDuration(duration)} by a moderator`;
+        } else {
+            text = `${displayName} was banned by a moderator`;
+        }
+        if (reason) text += ` (Reason: ${reason})`;
+        text += '.';
+        // IRC CLEARCHAT does not include moderator name; show generic moderator
+        chatLine.append(timeEl);
+        chatLine.append($('<span>').text(text));
+        ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
+    },
+
     initChat: function () {
         let proxyChat = $(`<div id="anti-ban-chat"></div>`);
         let chatPaused = $(`<div class="anti-ban-chat-paused"><span>Scroll Down</span></div>`);
@@ -441,6 +486,13 @@ ProxyChat = {
             $('.anti-ban-chat-paused').hide();
         });
         chatPaused.hide();
+
+        ProxyChat.lastDragEnd = 0;
+        $(document).on('click.anti-ban-dismiss', function (event) {
+            if (Date.now() - ProxyChat.lastDragEnd < 300) return;
+            if ($(event.target).closest('.anti-ban-user-popup, .anti-ban-thread-popup, .anti-ban-chat-username, .anti-ban-chat-thread-button').length) return;
+            $('.anti-ban-user-popup, .anti-ban-thread-popup').not('.anti-ban-pinned').remove();
+        });
     },
 
     updateChat: setInterval(function () {
@@ -479,6 +531,7 @@ ProxyChat = {
             time: new Date().toLocaleTimeString()
         });
         ProxyChat.userMessages[userKey] = ProxyChat.userMessages[userKey].slice(-10);
+        ProxyChat.refreshPinnedPopup(userKey);
 
         const reply = ProxyChat.wrapReply(message);
         if (reply) {
@@ -573,11 +626,12 @@ ProxyChat = {
     },
 
     showThreadPopup: function (replyElement) {
-        $('.anti-ban-user-popup, .anti-ban-thread-popup').remove();
+        $('.anti-ban-user-popup, .anti-ban-thread-popup').not('.anti-ban-pinned').remove();
         const messageId = replyElement.closest('.chat-line').attr('data-id');
         const messages = ProxyChat.buildThread(messageId);
         const popup = $('<div class="anti-ban-thread-popup">');
         popup.append($('<button class="anti-ban-popup-close" type="button">').text('×'));
+        ProxyChat.makePinButton(popup);
         popup.append($('<strong>').text(`Thread (${messages.length})`));
         const thread = $('<div class="anti-ban-thread-messages">');
         messages.forEach(item => {
@@ -614,21 +668,25 @@ ProxyChat = {
     },
 
     showUserPopup: function (usernameElement) {
-        $('.anti-ban-user-popup, .anti-ban-thread-popup').remove();
+        $('.anti-ban-user-popup, .anti-ban-thread-popup').not('.anti-ban-pinned').remove();
         const login = (usernameElement.attr('data-username') || '').toLowerCase();
         const userId = usernameElement.attr('data-user-id');
         const user = ProxyChat.userInfo[login] || {};
         const displayName = usernameElement.attr('data-display-name') || user.displayName || login || usernameElement.text().replace(/^@/, '');
         const popup = $('<div class="anti-ban-user-popup">');
         popup.append($('<button class="anti-ban-popup-close" type="button">').text('×'));
+        ProxyChat.makePinButton(popup);
         popup.append($('<strong>').text(displayName));
         popup.append($('<a target="_blank" rel="noopener noreferrer">').attr('href', `https://www.twitch.tv/${encodeURIComponent(login || displayName)}`).text('View Twitch profile'));
         const history = $('<div class="anti-ban-user-history">');
+        history.attr('data-user-key', login || userId || 'unknown');
         (ProxyChat.userMessages[login || userId || 'unknown'] || []).forEach(item => {
             history.append($('<div>').append($('<time>').text(`${item.time} `), $('<span>').html(item.html)));
         });
         popup.append(history);
         $('body').append(popup);
+        const chatWidth = $('.chat-list--default').outerWidth();
+        if (chatWidth) popup.css({ width: `${Math.min(chatWidth, window.innerWidth - 8)}px`, maxWidth: 'none' });
         const rect = usernameElement[0].getBoundingClientRect();
         popup.css({top: `${Math.min(rect.bottom, window.innerHeight - popup.outerHeight() - 8)}px`, left: `${Math.min(rect.left, window.innerWidth - popup.outerWidth() - 8)}px`});
         popup.on('click', '.anti-ban-popup-close', () => popup.remove());
@@ -689,37 +747,47 @@ ProxyChat = {
     },
 
     makeDraggable: function (popup) {
-        let dragging = false;
-        let startX, startY, origLeft, origTop;
-        
-        popup.on('mousedown', function (e) {
-            const target = e.target;
-            if ($(target).is('button, a, .anti-ban-user-history, .anti-ban-thread-messages, .anti-ban-chat-username')) return;
+        popup.on('mousedown.draggable', function (e) {
+            if ($(e.target).is('button, a, .anti-ban-user-history, .anti-ban-thread-messages, .anti-ban-chat-username')) return;
             e.preventDefault();
-            dragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
+            const startX = e.clientX;
+            const startY = e.clientY;
             const rect = popup[0].getBoundingClientRect();
-            origLeft = rect.left;
-            origTop = rect.top;
+            const origLeft = rect.left;
+            const origTop = rect.top;
             popup.css('cursor', 'grabbing');
+
+            $(document).on('mousemove.draggable', function (e) {
+                popup.css({
+                    left: `${Math.max(0, Math.min(origLeft + e.clientX - startX, window.innerWidth - popup.outerWidth()))}px`,
+                    top: `${Math.max(0, Math.min(origTop + e.clientY - startY, window.innerHeight - popup.outerHeight()))}px`
+                });
+            }).on('mouseup.draggable', function () {
+                ProxyChat.lastDragEnd = Date.now();
+                popup.css('cursor', '');
+                $(document).off('mousemove.draggable mouseup.draggable');
+            });
         });
-        
-        $(document).on('mousemove.draggable', function (e) {
-            if (!dragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newLeft = Math.max(0, Math.min(origLeft + dx, window.innerWidth - popup.outerWidth()));
-            const newTop = Math.max(0, Math.min(origTop + dy, window.innerHeight - popup.outerHeight()));
-            popup.css({ left: `${newLeft}px`, top: `${newTop}px` });
+    },
+
+    refreshPinnedPopup: function (userKey) {
+        const history = $(`.anti-ban-user-popup.anti-ban-pinned .anti-ban-user-history[data-user-key="${userKey}"]`);
+        if (!history.length) return;
+        history.empty();
+        (ProxyChat.userMessages[userKey] || []).forEach(item => {
+            history.append($('<div>').append($('<time>').text(`${item.time} `), $('<span>').html(item.html)));
         });
-        
-        $(document).on('mouseup.draggable', function () {
-            if (!dragging) return;
-            dragging = false;
-            popup.css('cursor', '');
-            $(document).off('mousemove.draggable mouseup.draggable');
+        history[0].scrollTop = history[0].scrollHeight;
+    },
+
+    makePinButton: function (popup) {
+        const pin = $('<button class="anti-ban-popup-pin" type="button" title="Pin">').html(
+            '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z" fill="currentColor"/></svg>'
+        );
+        pin.on('click', function () {
+            popup.toggleClass('anti-ban-pinned');
         });
+        popup.append(pin);
     },
 
     connect: function (channel) {
@@ -788,7 +856,17 @@ ProxyChat = {
                             if (message['target-msg-id']) ProxyChat.clearMessage(message['target-msg-id']);
                             return;
                         case "CLEARCHAT":
-                            if (message['target-user-id']) ProxyChat.clearAllMessages(message['target-user-id']);
+                            if (message['target-user-id']) {
+                                ProxyChat.clearAllMessages(message['target-user-id']);
+                                ProxyChat.writeBanNotice(message);
+                            } else {
+                                // chat cleared
+                                const chatLine = $('<div></div>');
+                                chatLine.addClass('chat-line anti-ban-system-message anti-ban-ban-notice');
+                                chatLine.append($('<span>').text(`[${new Date().toLocaleTimeString()}] `).css({color: '#adadb8', fontSize: '0.8em'}));
+                                chatLine.append($('<span>').text('Chat was cleared by a moderator.'));
+                                ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
+                            }
                             return;
                         case "PRIVMSG":
                             if (message.channel.toLowerCase() !== ProxyChat.channel || !message.msg) return;

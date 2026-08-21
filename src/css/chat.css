@@ -143,9 +143,19 @@
     font-size: 0.8em;
 }
 
-.anti-ban-chat-thread-highlight {
+#anti-ban-chat .chat-line {
+    background: transparent;
+}
+
+#anti-ban-chat .chat-line.anti-ban-chat-thread-highlight {
     background: #bf94ff22;
     border-radius: 0.25em;
+}
+
+.anti-ban-system-message {
+    opacity: 0.6;
+    font-style: italic;
+    color: #adadb8;
 }
 
 .anti-ban-chat-link {
@@ -177,6 +187,10 @@
     user-select: none;
 }
 
+.anti-ban-user-popup {
+    font-size: 1.05rem;
+}
+
 .anti-ban-user-popup button,
 .anti-ban-user-popup a,
 .anti-ban-user-popup .anti-ban-user-history,
@@ -205,6 +219,30 @@
     background: transparent;
     cursor: pointer;
     font-size: 1.25em;
+}
+
+.anti-ban-popup-pin {
+    position: absolute;
+    top: 0.5em;
+    right: 2em;
+    border: 0;
+    padding: 0;
+    color: #adadb8;
+    opacity: 0.45;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.anti-ban-user-popup.anti-ban-pinned .anti-ban-popup-pin,
+.anti-ban-thread-popup.anti-ban-pinned .anti-ban-popup-pin {
+    color: #ff3b3b;
+    opacity: 1;
+}
+
+.anti-ban-user-popup strong,
+.anti-ban-thread-popup strong {
+    padding-right: 4.5em;
 }
 
 .anti-ban-user-history {
