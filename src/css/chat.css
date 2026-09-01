@@ -6,6 +6,102 @@
     box-sizing: content-box;
 }
 
+/* Full height chat container and hide all footer / banned / input elements when anti-ban chat is active */
+body.anti-ban-chat-active .chat-room,
+body.anti-ban-chat-active .stream-chat,
+.chat-room:has(#anti-ban-chat),
+.stream-chat:has(#anti-ban-chat) {
+    height: 100% !important;
+    max-height: 100% !important;
+}
+
+body.anti-ban-chat-active .chat-room__content,
+.chat-room:has(#anti-ban-chat) .chat-room__content,
+.stream-chat:has(#anti-ban-chat) .chat-room__content {
+    flex: 1 1 100% !important;
+    flex-grow: 1 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+}
+
+#anti-ban-chat {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+body.anti-ban-chat-active .chat-input,
+body.anti-ban-chat-active [data-test-selector="chat-input-container"],
+body.anti-ban-chat-active [data-test-selector="chat-input-buttons-container"],
+body.anti-ban-chat-active [data-test-selector="banned-user-message"],
+body.anti-ban-chat-active [data-test-selector="request-unban-link"],
+body.anti-ban-chat-active [data-test-selector="cooldown-text"],
+body.anti-ban-chat-active .banned-chat-overlay,
+body.anti-ban-chat-active .banned-chat-overlay__halt,
+body.anti-ban-chat-active .banned-chat-overlay__circle,
+body.anti-ban-chat-active .banned-chat-overlay__message,
+body.anti-ban-chat-active .channel-points-reward-line,
+body.anti-ban-chat-active .community-points-summary,
+body.anti-ban-chat-active [data-test-selector="community-points-summary"],
+body.anti-ban-chat-active [data-test-selector="channel-points-reward-line"],
+body.anti-ban-chat-active [data-a-target="chat-input"],
+body.anti-ban-chat-active .chat-input-tray,
+body.anti-ban-chat-active .chat-room__footer,
+body.anti-ban-chat-active [data-test-selector="chat-footer"],
+body.anti-ban-chat-active .chat-room > div:not(.chat-room__content):not(.chat-room__header):not([data-a-target="chat-header"]):not([data-test-selector="chat-header"]),
+body.anti-ban-chat-active .stream-chat > div:not(.chat-room__content):not(.chat-room__header):not(.chat-room):not([data-a-target="chat-header"]):not([data-test-selector="chat-header"]),
+.chat-room:has(#anti-ban-chat) .chat-input,
+.chat-room:has(#anti-ban-chat) [data-test-selector="chat-input-container"],
+.chat-room:has(#anti-ban-chat) [data-test-selector="chat-input-buttons-container"],
+.chat-room:has(#anti-ban-chat) [data-test-selector="banned-user-message"],
+.chat-room:has(#anti-ban-chat) [data-test-selector="request-unban-link"],
+.chat-room:has(#anti-ban-chat) [data-test-selector="cooldown-text"],
+.chat-room:has(#anti-ban-chat) .banned-chat-overlay,
+.chat-room:has(#anti-ban-chat) .banned-chat-overlay__halt,
+.chat-room:has(#anti-ban-chat) .banned-chat-overlay__circle,
+.chat-room:has(#anti-ban-chat) .banned-chat-overlay__message,
+.chat-room:has(#anti-ban-chat) .channel-points-reward-line,
+.chat-room:has(#anti-ban-chat) .community-points-summary,
+.chat-room:has(#anti-ban-chat) [data-test-selector="community-points-summary"],
+.chat-room:has(#anti-ban-chat) [data-test-selector="channel-points-reward-line"],
+.chat-room:has(#anti-ban-chat) [data-a-target="chat-input"],
+.chat-room:has(#anti-ban-chat) .chat-input-tray,
+.chat-room:has(#anti-ban-chat) .chat-room__footer,
+.chat-room:has(#anti-ban-chat) [data-test-selector="chat-footer"],
+.chat-room:has(#anti-ban-chat) > div:not(.chat-room__content):not(.chat-room__header):not([data-a-target="chat-header"]):not([data-test-selector="chat-header"]),
+.stream-chat:has(#anti-ban-chat) .chat-input,
+.stream-chat:has(#anti-ban-chat) [data-test-selector="chat-input-container"],
+.stream-chat:has(#anti-ban-chat) [data-test-selector="chat-input-buttons-container"],
+.stream-chat:has(#anti-ban-chat) [data-test-selector="banned-user-message"],
+.stream-chat:has(#anti-ban-chat) [data-test-selector="request-unban-link"],
+.stream-chat:has(#anti-ban-chat) [data-test-selector="cooldown-text"],
+.stream-chat:has(#anti-ban-chat) .banned-chat-overlay,
+.stream-chat:has(#anti-ban-chat) .banned-chat-overlay__halt,
+.stream-chat:has(#anti-ban-chat) .banned-chat-overlay__circle,
+.stream-chat:has(#anti-ban-chat) .banned-chat-overlay__message,
+.stream-chat:has(#anti-ban-chat) .channel-points-reward-line,
+.stream-chat:has(#anti-ban-chat) .community-points-summary,
+.stream-chat:has(#anti-ban-chat) [data-test-selector="community-points-summary"],
+.stream-chat:has(#anti-ban-chat) [data-test-selector="channel-points-reward-line"],
+.stream-chat:has(#anti-ban-chat) [data-a-target="chat-input"],
+.stream-chat:has(#anti-ban-chat) .chat-input-tray,
+.stream-chat:has(#anti-ban-chat) .chat-room__footer,
+.stream-chat:has(#anti-ban-chat) [data-test-selector="chat-footer"],
+.stream-chat:has(#anti-ban-chat) > div:not(.chat-room__content):not(.chat-room__header):not(.chat-room):not([data-a-target="chat-header"]):not([data-test-selector="chat-header"]) {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .chat-line--deleted {
     opacity: 0.5;
     filter: grayscale(1);
@@ -290,7 +386,7 @@
 .anti-ban-chat-paused {
     cursor: pointer;
     position: absolute;
-    bottom: 10em;
+    bottom: 1.5em;
     left: 50%;
     transform: translate(-50%);
     display: block;
@@ -300,6 +396,7 @@
     color: #fff;
     background-color: #00000080;
     outline: 0.25rem solid;
+    z-index: 10;
 }
 
 .anti-ban-chat-paused span {

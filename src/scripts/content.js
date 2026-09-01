@@ -98,5 +98,10 @@ $(function () {
             console.log("Twitch Anti-Ban: restoring original player");
             ProxyStream.restoreOriginalPlayer();
         }
+
+        if (ProxyChat.channel && ProxyChat.channel !== currentChannel) {
+            console.log("Twitch Anti-Ban: restoring original chat");
+            ProxyChat.restoreOriginalChat();
+        }
     }, 1000);
 })

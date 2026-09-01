@@ -421,14 +421,44 @@ ProxyChat = {
         ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
     },
 
+    hideFooter: function () {
+        const footerSelectors = [
+            '.chat-input',
+            '[data-test-selector="chat-input-container"]',
+            '[data-test-selector="chat-input-buttons-container"]',
+            '[data-test-selector="banned-user-message"]',
+            '[data-test-selector="request-unban-link"]',
+            '[data-test-selector="cooldown-text"]',
+            '.banned-chat-overlay',
+            '.banned-chat-overlay__halt',
+            '.banned-chat-overlay__circle',
+            '.banned-chat-overlay__message',
+            '.channel-points-reward-line',
+            '.community-points-summary',
+            '[data-test-selector="community-points-summary"]',
+            '[data-test-selector="channel-points-reward-line"]',
+            '[data-a-target="chat-input"]',
+            '.chat-input-tray',
+            '.chat-room__footer',
+            '[data-test-selector="chat-footer"]'
+        ];
+        $(footerSelectors.join(', ')).hide();
+        $('.chat-room, .stream-chat').children().not('.chat-room__content, .chat-room__header, [data-a-target="chat-header"], [data-test-selector="chat-header"]').hide();
+    },
+
     initChat: function () {
+        $('body').addClass('anti-ban-chat-active');
+        $('.chat-room, .stream-chat').addClass('anti-ban-chat-active');
+        ProxyChat.hideFooter();
+
         let proxyChat = $(`<div id="anti-ban-chat"></div>`);
         let chatPaused = $(`<div class="anti-ban-chat-paused"><span>Scroll Down</span></div>`);
         let chatContainer = $('.chat-room__content').children().first();
         chatContainer.removeClass();
         chatContainer.addClass("chat-list--default");
         chatContainer.html(proxyChat);
-        chatContainer.attr('style', 'display: block !important;');
+        chatContainer.attr('style', 'display: block !important; height: 100% !important;');
+        $('.chat-room__content').attr('style', 'flex: 1 1 100% !important; height: 100% !important; max-height: 100% !important;');
         chatContainer.append(chatPaused);
 
         chatContainer.on('mouseenter', function () {
@@ -496,6 +526,9 @@ ProxyChat = {
     },
 
     updateChat: setInterval(function () {
+        if ($('#anti-ban-chat').length) {
+            ProxyChat.hideFooter();
+        }
         if (ProxyChat.messages.length > 0) {
             ProxyChat.messages.forEach(message => {
                 const chatContainer = $('.chat-list--default');
@@ -876,6 +909,18 @@ ProxyChat = {
                 });
             };
         });
+    },
+
+    restoreOriginalChat: function () {
+        $('body').removeClass('anti-ban-chat-active');
+        $('.anti-ban-chat-active').removeClass('anti-ban-chat-active');
+        $('#anti-ban-chat').remove();
+        $('.anti-ban-chat-paused').remove();
+        $('.chat-input, [data-test-selector="chat-input-container"], .channel-points-reward-line, .community-points-summary, .chat-room__footer').show();
+        $('.chat-room__content').removeAttr('style');
+        ProxyChat.disconnect();
+        ProxyChat.channel = null;
+        ProxyChat.channelId = null;
     },
 
     disconnect: function () {
