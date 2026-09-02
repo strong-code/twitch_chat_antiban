@@ -4,7 +4,7 @@ const archiver = require('archiver');
 const rimraf = require('rimraf');
 
 function prepareExtension() {
-  // 1. Read version from manifest.json
+  // 1. Read the Firefox-only manifest.
   const manifestPath = path.join(__dirname, 'src', 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const version = manifest.version;
@@ -17,36 +17,19 @@ function prepareExtension() {
   fs.mkdirSync(tempFirefoxPath, { recursive: true });
   copyFolderRecursiveSync(path.join(__dirname, 'src'), tempFirefoxPath);
 
-  // 3. Combine manifest files in temp-firefox
-  const firefoxManifestTemplate = JSON.parse(fs.readFileSync(path.join(tempFirefoxPath, 'manifest.firefox.json'), 'utf8'));
-  const firefoxManifest = combineManifests(manifest, firefoxManifestTemplate);
-  delete firefoxManifest.action;
-  delete firefoxManifest.service_worker;
-  fs.writeFileSync(path.join(tempFirefoxPath, 'manifest.json'), JSON.stringify(firefoxManifest, null, 2));
+  // 3. The source manifest is already Firefox MV2; no cross-browser merge.
 
-  // 4. Delete manifest.firefox.json
-  fs.unlinkSync(path.join(tempFirefoxPath, 'manifest.firefox.json'));
+  // 4. Never package local channel mappings; inject them only for local builds.
+  const apiUrl = config.APIURL;
+  if (typeof apiUrl !== 'string' || !apiUrl.trim()) {
+    throw new Error(`APIURL is required in ${configPath}`);
+  }
+  replaceTokens(tempFirefoxPath, apiUrl.trim(), config);
 
-  // 5. Never package local channel mappings; inject them only for local builds.
-  const apiUrl = process.env.APIURL;
-  if (!apiUrl) throw new Error('APIURL is required, e.g. APIURL=https://api.example.com node prepare.js');
-  replaceTokens(tempFirefoxPath, apiUrl, config);
-
-  // 6. Archive the Firefox extension
+  // 5. Archive the Firefox extension
   archiveExtension(tempFirefoxPath, `src-firefox-${version}.zip`);
 }
 
-function combineManifests(target, source) {
-  const output = { ...target };
-  
-  for (const key in source) {
-    if (source.hasOwnProperty(key)) {
-      output[key] = source[key];
-    }
-  }
-  
-  return output;
-}
 
 function copyFolderRecursiveSync(srcPath, destPath) {
   const entries = fs.readdirSync(srcPath, { withFileTypes: true });

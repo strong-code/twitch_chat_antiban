@@ -1,4 +1,4 @@
-const browserApi = typeof browser !== 'undefined' ? browser : chrome;
+const browserApi = browser;
 const twitchColors = ["#FF0000", "#0000FF", "#008000", "#B22222", "#E05B5B", "#FF7F50", "#9ACD32", "#FF4500", "#2E8B57", "#DAA520", "#D2691E", "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F"];
 let kickChannelMappings = null;
 
