@@ -37,11 +37,17 @@
     "*://*.betterttv.net/*",
     "*://*.7tv.io/*",
     "*://*.twitch.tv/*",
-    "*://*.ttvnw.net/*"
+    "*://*.ttvnw.net/*",
+    "*://kick.com/*",
+    "*://*.pusher.com/*"
   ],
   "permissions": [
     "storage"
   ],
+  "web_accessible_resources": [{
+    "resources": ["config.json"],
+    "matches": ["*://*.twitch.tv/*"]
+  }],
   "description": "Automatically opens a proxy stream & chat if you are banned in a channel.",
   "icons": {
     "128": "images/icon128.png",

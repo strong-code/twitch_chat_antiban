@@ -15,6 +15,54 @@ ProxyChat = {
     thirdPartyEmotePattern: null,
     badges: {},
     pingIntervalID: null,
+    kickSocket: null,
+    kickChannel: null,
+    messageSequence: 0,
+
+    enqueueMessage: function (html, timestamp) {
+        ProxyChat.messages.push({html, timestamp: Number(timestamp) || Date.now(), sequence: ++ProxyChat.messageSequence});
+    },
+
+    insertMessage: function (message) {
+        const container = $('#anti-ban-chat');
+        const node = $(message.html);
+        node.find('.chat-line').first().attr('data-message-timestamp', message.timestamp).attr('data-message-sequence', message.sequence);
+        const before = container.children().filter(function () {
+            const line = $(this).find('.chat-line').first();
+            const timestamp = Number(line.attr('data-message-timestamp')) || 0;
+            const sequence = Number(line.attr('data-message-sequence')) || 0;
+            return timestamp > message.timestamp || (timestamp === message.timestamp && sequence > message.sequence);
+        }).first();
+        if (before.length) before.before(node); else container.append(node);
+    },
+
+    connectKick: async function (channel) {
+        ProxyChat.disconnectKick();
+        ProxyChat.kickChannel = channel;
+        const chatroomId = await getKickChatroomId(channel);
+        if (!chatroomId || ProxyChat.kickChannel !== channel) return;
+        const socket = ProxyChat.kickSocket = new ReconnectingWebSocket(
+            'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=7.6.0&flash=false',
+            [], {reconnectInterval: 2000}
+        );
+        socket.onopen = () => socket.send(JSON.stringify({event: 'pusher:subscribe', data: {channel: `chatrooms.${chatroomId}.v2`}}));
+        socket.onmessage = event => {
+            let envelope;
+            try { envelope = JSON.parse(event.data); } catch { return; }
+            if (envelope.event === 'pusher:ping') { socket.send(JSON.stringify({event: 'pusher:pong', data: {}})); return; }
+            if (envelope.event !== 'App\\Events\\ChatMessageEvent') return;
+            let payload;
+            try { payload = typeof envelope.data === 'string' ? JSON.parse(envelope.data) : envelope.data; } catch { return; }
+            const message = parseKickChatMessage(payload);
+            if (message) ProxyChat.writeChat(message);
+        };
+    },
+
+    disconnectKick: function () {
+        if (ProxyChat.kickSocket) { ProxyChat.kickSocket.onclose = function () {}; ProxyChat.kickSocket.close(); }
+        ProxyChat.kickSocket = null;
+        ProxyChat.kickChannel = null;
+    },
 
     loadChannelData: async function () {
         const channelId = await getTwitchUserId(ProxyChat.channel);
@@ -418,7 +466,7 @@ ProxyChat = {
         // IRC CLEARCHAT does not include moderator name; show generic moderator
         chatLine.append(timeEl);
         chatLine.append($('<span>').text(text));
-        ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
+        ProxyChat.enqueueMessage(chatLine.wrap('<div>').parent().html());
     },
 
     hideFooter: function () {
@@ -530,10 +578,10 @@ ProxyChat = {
             ProxyChat.hideFooter();
         }
         if (ProxyChat.messages.length > 0) {
-            ProxyChat.messages.forEach(message => {
+            ProxyChat.messages.sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence).forEach(message => {
                 const chatContainer = $('.chat-list--default');
                 const isScrolledNearBottom = chatContainer.prop('scrollHeight') - chatContainer.innerHeight() <= chatContainer.scrollTop() + chatContainer.innerHeight() * 0.2; // 20% from bottom of container
-                $('#anti-ban-chat').append(message);
+                ProxyChat.insertMessage(message);
                 if (!ProxyChat.isHovering) {
                     if (isScrolledNearBottom) {
                         chatContainer.scrollTop(chatContainer.prop('scrollHeight') - chatContainer.innerHeight());
@@ -549,9 +597,11 @@ ProxyChat = {
     }, 200),
 
     writeChat: function (message) {
+        message.timestamp = Number(message.timestamp) || Date.now();
         const chatLine = $('<div></div>');
         const userInfo = $('<span></span>');
         chatLine.addClass('chat-line chat-line__message');
+        if (message.sourcePlatform === 'kick') chatLine.addClass('kick-chat-line');
         chatLine.attr('data-user-id', message['user-id']);
         chatLine.attr('data-id', message.id);
         ProxyChat.trackUser(message);
@@ -580,7 +630,7 @@ ProxyChat = {
         chatLine.append(userInfo);
         chatLine.append(renderedMessage);
         ProxyChat.storeMessage(message, renderedMessage);
-        ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
+        ProxyChat.enqueueMessage(chatLine.wrap('<div>').parent().html(), message.timestamp);
     },
 
     wrapReply: function (message) {
@@ -834,6 +884,9 @@ ProxyChat = {
             ProxyChat.messageById = {};
         }
         ProxyChat.channel = channelName;
+        getKickChannel(channelName).then(kickChannel => {
+            if (ProxyChat.channel === channelName && kickChannel) ProxyChat.connectKick(kickChannel);
+        });
 
         let disconnectTimeout;
         let lastDisconnectedTime = null;
@@ -898,7 +951,7 @@ ProxyChat = {
                                 chatLine.addClass('chat-line anti-ban-system-message anti-ban-ban-notice');
                                 chatLine.append($('<span>').text(`[${new Date().toLocaleTimeString()}] `).css({color: '#adadb8', fontSize: '0.8em'}));
                                 chatLine.append($('<span>').text('Chat was cleared by a moderator.'));
-                                ProxyChat.messages.push(chatLine.wrap('<div>').parent().html());
+                                ProxyChat.enqueueMessage(chatLine.wrap('<div>').parent().html());
                             }
                             return;
                         case "PRIVMSG":
@@ -919,6 +972,7 @@ ProxyChat = {
         $('.chat-input, [data-test-selector="chat-input-container"], .channel-points-reward-line, .community-points-summary, .chat-room__footer').show();
         $('.chat-room__content').removeAttr('style');
         ProxyChat.disconnect();
+        ProxyChat.disconnectKick();
         ProxyChat.channel = null;
         ProxyChat.channelId = null;
     },

@@ -4,4 +4,6 @@ package-lock.json
 output
 node_modules
 src*.zip
+config.json
+src/config.json
 .tool-versions
