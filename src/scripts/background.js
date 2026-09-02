@@ -1,6 +1,4 @@
-const browserApi = typeof browser !== 'undefined' ? browser : chrome;
-
-browserApi.runtime.onMessage.addListener((request, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'fetchJson') {
         fetch(request.url, {
             method: request.method || 'GET',
@@ -32,7 +30,7 @@ browserApi.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === 'loadKickConfig') {
-        fetch(browserApi.runtime.getURL('config.json'))
+        fetch(browser.runtime.getURL('config.json'))
             .then(response => response.ok ? response.json() : {})
             .then(data => sendResponse(data))
             .catch(() => sendResponse({}));
