@@ -243,6 +243,11 @@ body.anti-ban-chat-active .stream-chat > div:not(.chat-room__content):not(.chat-
     background: transparent;
 }
 
+#anti-ban-chat .chat-line.kick-chat-line {
+    border: 1px solid #53FC18;
+    box-sizing: border-box;
+}
+
 #anti-ban-chat .chat-line.anti-ban-chat-thread-highlight {
     background: #bf94ff22;
     border-radius: 0.25em;

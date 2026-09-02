@@ -1,5 +1,42 @@
 const browserApi = typeof browser !== 'undefined' ? browser : chrome;
 const twitchColors = ["#FF0000", "#0000FF", "#008000", "#B22222", "#E05B5B", "#FF7F50", "#9ACD32", "#FF4500", "#2E8B57", "#DAA520", "#D2691E", "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F"];
+let kickChannelMappings = null;
+
+async function getKickChannel(twitchChannel) {
+    if (!kickChannelMappings) {
+        kickChannelMappings = await new Promise(resolve => {
+            fetch(browserApi.runtime.getURL('config.json')).then(response => response.ok ? response.json() : {}).then(resolve).catch(() => resolve({}));
+        });
+    }
+    const channel = (twitchChannel || '').toLowerCase();
+    return typeof kickChannelMappings?.channels?.[channel] === 'string'
+        ? kickChannelMappings.channels[channel].trim().toLowerCase() || null
+        : null;
+}
+
+async function getKickChatroomId(channel) {
+    const data = await fetchJson(`https://kick.com/api/v2/channels/${encodeURIComponent(channel)}`);
+    const id = data?.chatroom?.id || data?.chatroom_id;
+    return Number.isFinite(Number(id)) ? Number(id) : null;
+}
+
+function parseKickChatMessage(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const sender = payload.sender || payload.user || {};
+    const content = payload.content || payload.message || '';
+    const displayName = sender.username || sender.slug || payload.sender_username || 'Kick user';
+    if (!content || !displayName) return null;
+    return {
+        id: payload.id || payload.message_id || `kick-${Date.now()}-${Math.random()}`,
+        login: (sender.slug || sender.username || payload.sender_username || displayName).toLowerCase(),
+        'display-name': displayName,
+        'user-id': String(sender.id || payload.sender_id || ''),
+        color: sender.identity?.color || sender.color || payload.sender_color || '',
+        msg: content,
+        timestamp: Date.parse(payload.created_at || payload.sent_at || payload.timestamp || '') || Date.now(),
+        sourcePlatform: 'kick'
+    };
+}
 
 async function fetchJson(url, method = "GET", headers = {}, body = null) {
     try {

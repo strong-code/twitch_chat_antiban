@@ -8,6 +8,9 @@ function prepareExtension() {
   const manifestPath = path.join(__dirname, 'src', 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const version = manifest.version;
+  const configPath = path.join(__dirname, 'config.json');
+  const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
+  if (fs.existsSync(configPath)) fs.copyFileSync(configPath, path.join(__dirname, 'src', 'config.json'));
 
   // 2. Create temp folders
   const tempFirefoxPath = path.join(__dirname, 'temp-firefox');
@@ -24,9 +27,10 @@ function prepareExtension() {
   // 4. Delete manifest.firefox.json
   fs.unlinkSync(path.join(tempFirefoxPath, 'manifest.firefox.json'));
 
-  // 5. Replace external API
+  // 5. Never package local channel mappings; inject them only for local builds.
   const apiUrl = process.env.APIURL;
-  replaceTokens(tempFirefoxPath, apiUrl);
+  if (!apiUrl) throw new Error('APIURL is required, e.g. APIURL=https://api.example.com node prepare.js');
+  replaceTokens(tempFirefoxPath, apiUrl, config);
 
   // 6. Archive the Firefox extension
   archiveExtension(tempFirefoxPath, `src-firefox-${version}.zip`);
@@ -71,11 +75,12 @@ function archiveExtension(dirPath, name, dir = false) {
   });
 }
 
-function replaceTokens(dirPath, apiUrl) {
+function replaceTokens(dirPath, apiUrl, config) {
   const utilsFilePath = path.join(dirPath, 'scripts', 'utils.js');
   const utilsContent = fs.readFileSync(utilsFilePath, 'utf8');
   const replacedContent = utilsContent
     .replace(/%APIURL%/g, apiUrl)
+    .replace('let kickChannelMappings = {channels: {}};', `let kickChannelMappings = ${JSON.stringify(config)};`);
   fs.writeFileSync(utilsFilePath, replacedContent);
 }
 

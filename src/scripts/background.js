@@ -30,4 +30,12 @@ browserApi.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     }
+
+    if (request.type === 'loadKickConfig') {
+        fetch(browserApi.runtime.getURL('config.json'))
+            .then(response => response.ok ? response.json() : {})
+            .then(data => sendResponse(data))
+            .catch(() => sendResponse({}));
+        return true;
+    }
 }); 
