@@ -17,6 +17,8 @@ ProxyChat = {
     pingIntervalID: null,
     kickSocket: null,
     kickChannel: null,
+    kickEmotesById: {},
+    kickEmotesByName: {},
     messageSequence: 0,
 
     enqueueMessage: function (html, timestamp) {
@@ -39,6 +41,7 @@ ProxyChat = {
     connectKick: async function (channel) {
         ProxyChat.disconnectKick();
         ProxyChat.kickChannel = channel;
+        ProxyChat.loadKickEmotes(channel);
         const chatroomId = await getKickChatroomId(channel);
         if (!chatroomId || ProxyChat.kickChannel !== channel) return;
         const socket = ProxyChat.kickSocket = new ReconnectingWebSocket(
@@ -62,6 +65,30 @@ ProxyChat = {
         if (ProxyChat.kickSocket) { ProxyChat.kickSocket.onclose = function () {}; ProxyChat.kickSocket.close(); }
         ProxyChat.kickSocket = null;
         ProxyChat.kickChannel = null;
+        ProxyChat.kickEmotesById = {};
+        ProxyChat.kickEmotesByName = {};
+    },
+
+    loadKickEmotes: async function (channel) {
+        ProxyChat.kickEmotesById = {};
+        ProxyChat.kickEmotesByName = {};
+        if (!channel) return;
+        const emotes = await getKickChannelEmotes(channel);
+        if (ProxyChat.kickChannel !== channel) return;
+        (emotes || []).forEach(emote => {
+            if (!emote?.id) return;
+            const emoteObj = {
+                id: String(emote.id),
+                name: emote.name || '',
+                provider: 'Kick',
+                src: `https://files.kick.com/emotes/${emote.id}/fullsize`,
+                hoverSrc: `https://files.kick.com/emotes/${emote.id}/fullsize`
+            };
+            ProxyChat.kickEmotesById[String(emote.id)] = emoteObj;
+            if (emote.name) {
+                ProxyChat.kickEmotesByName[emote.name] = emoteObj;
+            }
+        });
     },
 
     loadChannelData: async function () {
@@ -188,6 +215,73 @@ ProxyChat = {
         });
         fragment.append(document.createTextNode(message.msg.substring(cursor)));
         return fragment;
+    },
+
+    replaceKickEmotes: function (messageElement) {
+        const bracketPattern = /\[emote:(\d+)(?::([^\]]*))?\]/g;
+        messageElement.contents().each(function () {
+            if (this.nodeType !== 3) return;
+            const text = this.nodeValue;
+            if (!text || !text.includes('[emote:')) return;
+            let didReplace = false;
+            let lastIndex = 0;
+            const parts = [];
+            bracketPattern.lastIndex = 0;
+            let match;
+            while ((match = bracketPattern.exec(text)) !== null) {
+                const emoteId = match[1];
+                const cached = ProxyChat.kickEmotesById?.[emoteId];
+                const emoteName = (match[2] && match[2].trim()) || cached?.name || `emote-${emoteId}`;
+                const emoteData = cached || {
+                    id: emoteId,
+                    name: emoteName,
+                    provider: 'Kick',
+                    src: `https://files.kick.com/emotes/${emoteId}/fullsize`,
+                    hoverSrc: `https://files.kick.com/emotes/${emoteId}/fullsize`
+                };
+                if (!ProxyChat.kickEmotesById[emoteId]) {
+                    ProxyChat.kickEmotesById[emoteId] = emoteData;
+                }
+                if (emoteName && !ProxyChat.kickEmotesByName[emoteName]) {
+                    ProxyChat.kickEmotesByName[emoteName] = emoteData;
+                }
+                parts.push(text.substring(lastIndex, match.index));
+                parts.push($(ProxyChat.wrapEmote(emoteData))[0]);
+                lastIndex = bracketPattern.lastIndex;
+                didReplace = true;
+            }
+            if (didReplace) {
+                parts.push(text.substring(lastIndex));
+                ProxyChat.replaceTextNode(this, parts);
+            }
+        });
+
+        if (ProxyChat.kickEmotesByName && Object.keys(ProxyChat.kickEmotesByName).length > 0) {
+            const colonPattern = /:([a-zA-Z0-9_]{2,}):/g;
+            messageElement.contents().each(function () {
+                if (this.nodeType !== 3) return;
+                const text = this.nodeValue;
+                if (!text || !text.includes(':')) return;
+                let didReplace = false;
+                let lastIndex = 0;
+                const parts = [];
+                colonPattern.lastIndex = 0;
+                let match;
+                while ((match = colonPattern.exec(text)) !== null) {
+                    const name = match[1];
+                    const emoteData = ProxyChat.kickEmotesByName[name];
+                    if (!emoteData) continue;
+                    parts.push(text.substring(lastIndex, match.index));
+                    parts.push($(ProxyChat.wrapEmote(emoteData))[0]);
+                    lastIndex = colonPattern.lastIndex;
+                    didReplace = true;
+                }
+                if (didReplace) {
+                    parts.push(text.substring(lastIndex));
+                    ProxyChat.replaceTextNode(this, parts);
+                }
+            });
+        }
     },
 
     replaceThirdPartyEmotes: function (messageElement) {
@@ -326,6 +420,7 @@ ProxyChat = {
             messageElement.css('color', color);
         }
         messageElement.append(ProxyChat.replaceTwitchEmotes(message).contents());
+        ProxyChat.replaceKickEmotes(messageElement);
         ProxyChat.replaceThirdPartyEmotes(messageElement);
         ProxyChat.replaceMentions(messageElement);
         ProxyChat.replaceUrls(messageElement);
@@ -670,7 +765,7 @@ ProxyChat = {
             userId: message['user-id'] || '',
             displayName: message['display-name'] || message.login || message.source?.nickname || '',
             color: message.color || '',
-            text: message.msg,
+            text: message.sourcePlatform === 'kick' ? message.msg.replace(/\[emote:\d+:?([^\]]*)\]/g, (m, name) => name ? `:${name}:` : m) : message.msg,
             html: renderedMessage.html(),
             time: new Date().toLocaleTimeString(),
             children: []

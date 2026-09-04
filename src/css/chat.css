@@ -244,7 +244,8 @@ body.anti-ban-chat-active .stream-chat > div:not(.chat-room__content):not(.chat-
 }
 
 #anti-ban-chat .chat-line.kick-chat-line {
-    border: 1px solid #53FC18;
+    border: 1px solid rgba(83, 252, 24, 0.45);
+    border-radius: 0.25em;
     box-sizing: border-box;
 }
 

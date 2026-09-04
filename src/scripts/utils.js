@@ -20,6 +20,28 @@ async function getKickChatroomId(channel) {
     return Number.isFinite(Number(id)) ? Number(id) : null;
 }
 
+async function getKickChannelEmotes(channel) {
+    if (!channel) return [];
+    const data = await fetchJson(`https://kick.com/emotes/${encodeURIComponent(channel)}`);
+    if (!Array.isArray(data)) return [];
+    const emotes = [];
+    data.forEach(group => {
+        if (group && Array.isArray(group.emotes)) {
+            group.emotes.forEach(emote => {
+                if (emote && emote.id) {
+                    emotes.push({
+                        id: String(emote.id),
+                        name: emote.name || '',
+                        subscribersOnly: !!emote.subscribers_only,
+                        channelId: emote.channel_id || (group.id !== 'Global' && group.id !== 'Emoji' ? group.id : null)
+                    });
+                }
+            });
+        }
+    });
+    return emotes;
+}
+
 function parseKickChatMessage(payload) {
     if (!payload || typeof payload !== 'object') return null;
     const sender = payload.sender || payload.user || {};

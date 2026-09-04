@@ -34,6 +34,7 @@
     "*://*.twitch.tv/*",
     "*://*.ttvnw.net/*",
     "*://kick.com/*",
+    "*://*.kick.com/*",
     "*://*.pusher.com/*"
   ],
   "web_accessible_resources": ["config.json"],
